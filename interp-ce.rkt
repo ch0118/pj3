@@ -58,6 +58,19 @@
 ; Handling errors and some trickier cases will give bonus points. 
 (define (interp-ce exp)
   ; Might add helpers or other code here...
+  (define (apply-primitive op args)
+    (match op
+      ['+ (apply + args)]
+      ['- (apply - args)]
+      ['* (apply * args)]
+      ['= (apply = args)]
+      ['equal? (apply equal? args)]
+      ['list (apply list args)]
+      ['cons (cons (first args) (second args))]
+      ['car (car (first args))]
+      ['cdr (cdr (first args))]
+      ['null? (null? (first args))]
+      [else `(error "Unsupported primitive operation: ~a" ,op)]))
   (define (interp exp env)
     (match exp
       [(? symbol? x) (hash-ref env x)]
@@ -72,20 +85,46 @@
        ;; evaluate e0 to v0
        (define v0 (interp e0 env))
        (interp e-body (hash-set env x v0))]
-      ;;[`(let ([,xs ,es] ...) ,e-body) 'todo]
-      ;;[`(let* ([,xs ,es] ...) ,e-body) 'todo]
+      ;;[`(let ([,xs ,es] ...) ,e-body) 
+          (define values (map (lambda (e) (interp e env)) es))
+          (define new-env (foldl (lambda (acc-env x val) (hash-set acc-env x val))
+                          env
+                          xs
+                          values))
+          (interp `(begin ,@e-body) new-env))]
+      ;;[`(let* ([,xs ,es] ...) ,e-body)
+          (define (process-bindings xs es env)
+            (if (null? xs)
+                env
+                (let* ((x (car xs))
+                       (e (car es))
+                       (val (interp e env))
+                       (new-env (hash-set env x val)))
+                 (process-bindings (cdr xs) (cdr es) new-env))))
+          (define new-env (process-bindings xs es env))
+          (interp `(begin ,@e-body) new-env))]
       [`(and)
        #t]
       [`(and ,e0 ,e-rest ...)
        (if (interp e0 env)
            (interp `(and ,@e-rest) env)
            #f)]
-      [`(or ,es ...) 'todo]
+      [`((or ,e0 ,e-rest ...) 
+         (let ([v0 (interp e0 env)])
+           (if v0 v0 (interp `(or ,@e-rest) env)))]
       [(? number? n) n]
       [(? boolean? b) b]
       [''() '()]
       [`(,ef ,eargs ...)
-       'todo]))
+       (let* ((vf (interp ef env))
+              (vargs (map (lambda (arg) (interp arg env)) eargs)))
+         (match vf
+           [`(closure (lambda ,args ,body) ,closure-env)
+            (let* ((new-env (foldl (lambda (param val acc-env) (hash-set acc-env param val))
+                                   closure-env
+                                   (zip args vargs))))
+              (interp body new-env))]
+           [else (apply-primitive vf vargs)]))]))
        
   ;; you need to cook up a starting environment: at first it can just
   ;; be the empty hash, but later on you may want to add things like
