@@ -85,14 +85,14 @@
        ;; evaluate e0 to v0
        (define v0 (interp e0 env))
        (interp e-body (hash-set env x v0))]
-      ;;[`(let ([,xs ,es] ...) ,e-body) 
+      [`(let ([,xs ,es] ...) ,e-body) 
           (define values (map (lambda (e) (interp e env)) es))
           (define new-env (foldl (lambda (acc-env x val) (hash-set acc-env x val))
                           env
                           xs
                           values))
           (interp `(begin ,@e-body) new-env))]
-      ;;[`(let* ([,xs ,es] ...) ,e-body)
+      [`(let* ([,xs ,es] ...) ,e-body)
           (define (process-bindings xs es env)
             (if (null? xs)
                 env
